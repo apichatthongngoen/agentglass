@@ -146,12 +146,17 @@ export function DashboardView({
           screen however far down the panels have been read. */}
       <FleetVerdictStrip verdict={fleet} onOpenLantern={onOpenLantern} />
 
-      <div className="flex-1 min-h-0 p-3 flex flex-col gap-3 overflow-auto tall:overflow-hidden agx-scroll">
+      {/* LOCAL PATCH (apichat 2026-09-27): the tall layout clipped instead of
+          scrolling, and the Usage cell below grows with every quota row. With
+          Claude's three windows plus two Codex accounts it outgrew its row, the
+          middle row (flex-1) was squeezed to ~30px and Live vanished. The middle
+          row now keeps a floor and the page scrolls past it when it must. */}
+      <div className="flex-1 min-h-0 p-3 flex flex-col gap-3 overflow-auto agx-scroll">
         <div className="shrink-0">
           <Kpis stats={stats} agents={agents} fleet={fleet} startedAt={startedAt} epm={epm} />
         </div>
 
-        <div className="shrink-0 min-h-0 tall:flex-1 grid grid-cols-1 xl:grid-cols-12 gap-3">
+        <div className="shrink-0 min-h-0 tall:flex-1 tall:min-h-[440px] grid grid-cols-1 xl:grid-cols-12 gap-3">
           <div className="xl:col-span-3 min-w-0 min-h-0 h-[420px] xl:h-[520px] tall:h-auto">
             <Fleet agents={agents} activeApp={filter.app} active={active} onSelect={(a) => onSelectSession({ id: a.session_id, app: a.source_app })} />
           </div>

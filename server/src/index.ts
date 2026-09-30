@@ -146,6 +146,7 @@ import {
 import { repoSpend } from "./spend.ts";
 import { generateWalkthrough, WALKTHROUGH_ENABLED } from "./walkthrough.ts";
 import { ptyOpen, ptyMessage, ptyClose, projectCommands, shutdownTerminals, lastTmuxTarget, sessionTitle, TERMINAL_ENABLED, PTY_BACKEND, type PtyWsData } from "./terminal.ts";
+import { extFor, savePastedImage, PASTE_MAX_BYTES } from "./pasteimage.ts"; // LOCAL PATCH: see pasteimage.ts
 import { agentBinFor, mintAgentTicket } from "./agentticket.ts";
 import { makeViewTempDir } from "./viewtemp.ts";
 import { transcribe, transcriberOn } from "./dictate.ts";
@@ -1532,7 +1533,7 @@ const isPrivate = (h: string): boolean => privateHost(h, TRUST_LAN);
 // presents once it pairs over `tailscale serve`. Detected from `tailscale
 // status`, never a wildcard — only the exact name(s) this node answers to.
 const trustedName = (h: string): boolean => TRUST_LAN && tailnetNames().has(h.toLowerCase());
-const trusted = (h: string): boolean => isPrivate(h) || trustedName(h);
+const trusted = (h: string): boolean => isPrivate(h) || trustedName(h) || ALLOWED_HOSTS.has(h.toLowerCase());
 
 // Block drive-by cross-site writes: a request carrying an Origin from a real
 // website is rejected. A request with NO Origin is not a browser, so it can't
@@ -8010,6 +8011,21 @@ const server = Bun.serve<WsData>({
           return json({ ok: false, error: "unknown op" }, 400);
       }
       return json(res, res.ok ? 200 : 400);
+    }
+
+    // LOCAL PATCH (apichat 2026-09-23): an image pasted in the browser, saved on
+    // this machine so the CLI in the pane can read it. See pasteimage.ts.
+    // A POST, so it needs the "full" scope and the CSRF gate like any write.
+    if (pathname === "/terminal/paste-image" && req.method === "POST") {
+      if (!trustedCaller(req, from)) return csrfBlocked();
+      if (!TERMINAL_ENABLED) return json({ ok: false, error: "terminal is disabled" }, 403);
+      const ext = extFor(req.headers.get("content-type"));
+      if (!ext) return json({ ok: false, error: "not an image" }, 415);
+      if (Number(req.headers.get("content-length") || 0) > PASTE_MAX_BYTES) return json({ ok: false, error: "image too large" }, 413);
+      const bytes = new Uint8Array(await req.arrayBuffer());
+      if (!bytes.length) return json({ ok: false, error: "empty" }, 400);
+      if (bytes.length > PASTE_MAX_BYTES) return json({ ok: false, error: "image too large" }, 413);
+      return json({ ok: true, path: savePastedImage(bytes, ext) });
     }
 
     if (pathname === "/terminal/commands") {

@@ -186,7 +186,7 @@ function UsageSection() {
   return (
     <div className="flex flex-col gap-2">
       {rows!.map((u) => (
-        <div key={u.provider} className="flex flex-col gap-1">
+        <div key={`${u.provider}:${u.label}`} className="flex flex-col gap-1">
           <div className="flex items-baseline gap-2">
             <span className="text-[12px]" style={{ color: "var(--text)" }}>{u.label}</span>
             {u.plan && <span className="chip text-[9px] uppercase">{u.plan}</span>}

@@ -42,6 +42,12 @@ set -g history-limit 20000
 # also removes the one place a plugin would have hooked itself in.
 set -g status off
 set -g mouse on
+# LOCAL PATCH (apichat 2026-09-24): the panel sends one wheel report per line
+# scrolled (TerminalPanel), so a report is one line here, not tmux's default 5.
+bind -T copy-mode WheelUpPane select-pane \\; send -X -N 1 scroll-up
+bind -T copy-mode WheelDownPane select-pane \\; send -X -N 1 scroll-down
+bind -T copy-mode-vi WheelUpPane select-pane \\; send -X -N 1 scroll-up
+bind -T copy-mode-vi WheelDownPane select-pane \\; send -X -N 1 scroll-down
 set -g escape-time 0
 # Tabs start at 1, because that is where the number keys are.
 #

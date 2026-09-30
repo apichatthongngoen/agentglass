@@ -905,6 +905,18 @@ const realApi = {
   providerUsage: () => get<ProviderUsage[]>(`/usage/providers`),
   refreshCodexUsage: () => post<{ ok: boolean; error?: string }>(`/usage/codex/refresh`, {}),
   claimPaceAlerts: (alertAt: number) => post<{ ok: boolean; fired: number }>(`/usage/pace-claim`, { alertAt }),
+  /** LOCAL PATCH (apichat 2026-09-23): a pasted image goes to the server's own
+   *  disk and comes back as a path, because the CLI in the pane can only read a
+   *  clipboard on the machine it runs on — see TerminalPanel's paste handler. */
+  pasteImage: async (blob: Blob): Promise<{ ok: boolean; path?: string; error?: string }> => {
+    await whenServerUp();
+    const r = await fetch(SERVER + "/terminal/paste-image", {
+      method: "POST",
+      headers: authHeaders({ "content-type": blob.type || "application/octet-stream" }),
+      body: blob,
+    });
+    return r.json();
+  },
   // usage_since: the epoch the call counts are known from. They are bounded
   // by AGENTGLASS_RETENTION_DAYS, so a bare count reads as a lifetime total
   // and is not. 0 means pruning is off and it really is all time.
@@ -2165,6 +2177,7 @@ const demoApi: typeof realApi = {
   providerUsage: () => D(demo.providerUsage() as ProviderUsage[]),
   refreshCodexUsage: () => D({ ok: false, error: "not available in the demo" }),
   claimPaceAlerts: (_alertAt: number) => D({ ok: true, fired: 0 }),
+  pasteImage: () => D({ ok: false, error: "not available in the demo" }),
   skills: () => D(demo.skills()),
   changes: () => D(demo.changes()),
   session: (id: string) => D(demo.session(id)),

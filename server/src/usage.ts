@@ -188,6 +188,28 @@ class UsageHttpError extends Error {
 }
 
 async function token(): Promise<string | null> {
+  // LOCAL PATCH (apichat 2026-09-23): on macOS Claude Code keeps its OAuth
+  // credentials in the login Keychain. ~/.claude/.credentials.json, when it
+  // exists there at all, is a leftover that is no longer refreshed — reading it
+  // got HTTP 401, and without the endpoint the per-model weekly bar (Fable)
+  // never appears, because the statusline feed does not carry it. So the
+  // Keychain comes first on darwin and the file stays the fallback; an explicit
+  // CLAUDE_CREDENTIALS still wins, which keeps the tests on their scratch file.
+  // The token goes only where upstream already sends it: api.anthropic.com.
+  // The first read may raise a Keychain prompt — "Always Allow" ends it.
+  if (process.platform === "darwin" && !process.env.CLAUDE_CREDENTIALS) {
+    try {
+      const p = Bun.spawnSync(
+        ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+        { stdout: "pipe", stderr: "ignore", timeout: 5000 },
+      );
+      if (p.exitCode === 0) {
+        const c = JSON.parse(p.stdout.toString()) as any;
+        const t = c?.claudeAiOauth?.accessToken ?? c?.accessToken;
+        if (typeof t === "string" && t) return t;
+      }
+    } catch { /* no Keychain item, or unreadable: fall through to the file */ }
+  }
   try {
     const c = (await Bun.file(credPath()).json()) as any;
     return c?.claudeAiOauth?.accessToken ?? c?.accessToken ?? null;

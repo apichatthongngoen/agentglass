@@ -114,7 +114,24 @@ function wired(a: Roster, path: string, found: boolean): boolean {
  * this app does not choose it and cannot pin it. The fragment is the part that
  * does not change.
  */
-function lastSeen(match: string, q: typeof db = db): number | null {
+export function lastSeen(match: string, q: typeof db = db): number | null {
+  /*
+   * LOCAL PATCH (apichat 2026-09-24): Claude Code's hooks label an event with
+   * the PROJECT (send_event.py defaults --source-app to the cwd's basename), so
+   * no source_app ever contains "claude" and the row read "nothing has arrived
+   * yet" while thousands of its events sat in the table. Its events do carry
+   * the model, and a `claude-*` model name comes only from Claude Code here:
+   * the OTLP agents never report one, OpenCode spells it `anthropic/claude-*`,
+   * and Antigravity (which can run Claude) is excluded by its fixed source_app.
+   */
+  if (match === "claude") {
+    const r = q
+      .query<{ t: number | null }, []>(
+        "SELECT MAX(timestamp) AS t FROM events WHERE source_app LIKE '%claude%' OR (model_name LIKE 'claude%' AND source_app <> 'antigravity')"
+      )
+      .get();
+    return r?.t ?? null;
+  }
   const r = q
     .query<{ t: number | null }, [string]>(
       "SELECT MAX(timestamp) AS t FROM events WHERE source_app LIKE '%' || ? || '%'"
