@@ -108,11 +108,13 @@ function lastRateLimits(path: string): { windows: QuotaWindow[]; plan?: string }
 }
 
 /** Keyed on the file we read and its mtime: repeat calls are free until Codex
- *  writes again, and a new turn invalidates without a timer. */
-let cache: { key: string; value: ProviderUsage } | null = null;
+ *  writes again, and a new turn invalidates without a timer. One slot per
+ *  CODEX_HOME, because a machine may sign a second account into its own home
+ *  (see codexUsageAll) and one shared slot would make the two rows flap. */
+const cache = new Map<string, { key: string; value: ProviderUsage }>();
 
-export function codexUsage(): ProviderUsage {
-  const root = join(codexHome(), "sessions");
+export function codexUsage(home: string = codexHome(), label: string = LABEL): ProviderUsage {
+  const root = join(home, "sessions");
   if (!existsSync(root)) {
     return unavailable("No Codex sessions on this machine yet — run a Codex turn and the quota appears here.");
   }
@@ -123,7 +125,8 @@ export function codexUsage(): ProviderUsage {
   let mtime = 0;
   try { mtime = statSync(files[0]!).mtimeMs; } catch { /* fine */ }
   const key = `${files[0]}:${mtime}`;
-  if (cache && cache.key === key) return cache.value;
+  const hit0 = cache.get(home);
+  if (hit0 && hit0.key === key) return hit0.value;
 
   let value: ProviderUsage = unavailable(
     "No recent Codex turn recorded its quota — run a Codex turn to refresh it.",
@@ -134,17 +137,62 @@ export function codexUsage(): ProviderUsage {
     let observedAt = Date.now();
     try { observedAt = statSync(path).mtimeMs; } catch { /* fine */ }
     value = {
-      provider: "codex", label: LABEL, available: true,
+      provider: "codex", label, available: true,
       windows: hit.windows, plan: hit.plan, observedAt,
     };
     break;
   }
-  cache = { key, value };
+  cache.set(home, { key, value });
   return value;
 }
 
+/**
+ * LOCAL PATCH (apichat 2026-09-25): a window whose reset has passed is empty.
+ *
+ * The reading is whatever the last Codex turn on this machine wrote, and an
+ * account nobody has used here for a day kept showing that turn's 5h figure —
+ * "93%, resets now" thirty hours after the reset. Past `resetsAt` nothing this
+ * machine recorded counts against the new window, so it reads 0. Applied on the
+ * way out rather than cached, because the file does not change when the clock
+ * passes the reset. Applied in codexUsageAll (what the dashboard reads), so
+ * codexUsage() itself still returns the file's reading as written.
+ */
+export function rolledOver(v: ProviderUsage, now: number = Date.now()): ProviderUsage {
+  if (!v.windows?.some((w) => w.resetsAt && Date.parse(w.resetsAt) <= now)) return v;
+  return {
+    ...v,
+    windows: v.windows.map((w) => (w.resetsAt && Date.parse(w.resetsAt) <= now ? { ...w, usedPercent: 0, resetsAt: null } : w)),
+  };
+}
+
+/**
+ * LOCAL PATCH (apichat 2026-09-22): one row per signed-in Codex account.
+ *
+ * Upstream resolves a single CODEX_HOME, so a machine with a second account in
+ * its own home (here `~/.codex-b`, switched into with CODEX_HOME=...) could
+ * never see that account's quota. Extra homes are named in
+ * AGENTGLASS_CODEX_EXTRA_HOMES as comma-separated `label|path` pairs; a bare
+ * path falls back to the directory name as its label. Re-apply after git pull.
+ */
+export function codexHomes(): { home: string; label: string }[] {
+  const out = [{ home: codexHome(), label: LABEL }];
+  const extra = (process.env.AGENTGLASS_CODEX_EXTRA_HOMES || "").split(",").map((e) => e.trim()).filter(Boolean);
+  for (const entry of extra) {
+    const bar = entry.indexOf("|");
+    const home = (bar === -1 ? entry : entry.slice(bar + 1)).trim();
+    if (!home) continue;
+    const label = bar === -1 ? `${LABEL} ${home.split("/").filter(Boolean).pop()}` : entry.slice(0, bar).trim() || LABEL;
+    out.push({ home, label });
+  }
+  return out;
+}
+
+export function codexUsageAll(): ProviderUsage[] {
+  return codexHomes().map(({ home, label }) => rolledOver(codexUsage(home, label)));
+}
+
 /** Test seam: forget the cached reading. */
-export function __resetCodexUsageCache(): void { cache = null; }
+export function __resetCodexUsageCache(): void { cache.clear(); }
 
 /**
  * Which model the refresh ping runs on.
@@ -182,13 +230,24 @@ export async function refreshCodexUsage(): Promise<{ ok: boolean; error?: string
     const args = ["exec", "--sandbox", "read-only"];
     if (model) args.push("--model", model);
     args.push("Reply with the single word: ok");
-    const proc = Bun.spawn(["codex", ...args], {
-      stdout: "ignore", stderr: "ignore", timeout: REFRESH_TIMEOUT_MS,
-    });
-    const code = await proc.exited;
+    // LOCAL PATCH (apichat 2026-09-23): one turn per signed-in account. The
+    // ambient CODEX_HOME refreshes only the account the shell happens to be
+    // on, so the second row stayed as old as its last real conversation —
+    // which is how a 5h meter came to show a figure from two days earlier.
+    // A failure on one account (rate-limited, signed out) must not hide a
+    // success on the other, so every home is tried and the errors collected.
+    const failures: string[] = [];
+    for (const { home, label } of codexHomes()) {
+      const proc = Bun.spawn(["codex", ...args], {
+        stdout: "ignore", stderr: "ignore", timeout: REFRESH_TIMEOUT_MS,
+        env: { ...process.env, CODEX_HOME: home },
+      });
+      const code = await proc.exited;
+      if (code !== 0) failures.push(`${label} exited ${code}`);
+    }
     // The turn's OUTPUT is worthless — the point is the rate_limits it wrote
     // on its way past. Drop the cache so the next read sees the new file.
     __resetCodexUsageCache();
-    return code === 0 ? { ok: true } : { ok: false, error: `codex exited ${code}` };
+    return failures.length ? { ok: false, error: failures.join("; ") } : { ok: true };
   });
 }

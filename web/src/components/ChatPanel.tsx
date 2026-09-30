@@ -30,7 +30,7 @@ import { fmtTime } from "../lib/format.ts";
 import { Select } from "./Select.tsx";
 import { CheckoutPicker } from "./CheckoutPicker.tsx";
 import { SCROLLBAR_CSS, CODE_FONT_STYLE } from "./diff/DiffLines.tsx";
-import { fmtAgo, fmtUsd, fmtTokens, modelLabelOf, modelColor } from "../lib/format.ts";
+import { fmtAgo, fmtUsd, fmtTokens, modelLabelOf, modelColor, sessionTitle } from "../lib/format.ts";
 import { sessionIsLive, resumableAgent } from "../lib/derive.ts";
 import { ctxLimitOf } from "../lib/contextWindow.ts";
 import { sessionWorktree, sessionCwd } from "../lib/worktree.ts";
@@ -544,11 +544,16 @@ function ResumeRow({ s, openChatId, onPick }: { s: SessionRollup; openChatId?: s
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-1.5 min-w-0">
-          <span className="truncate text-[11.5px]" style={{ color: "var(--text2)" }}>{label}</span>
+          {/* LOCAL PATCH (apichat 2026-09-24): lead with the session's own name
+              (a /rename, else Claude's ai-title, else the first prompt). Every
+              row on one repo used to read "<repo> <8 hex>", which cannot be told
+              apart by eye; the repo moves to the second line. */}
+          <span className="truncate text-[11.5px]" style={{ color: "var(--text2)" }}>{sessionTitle(s)}</span>
           <span className="text-[9.5px] tabular-nums t-dim2 shrink-0">{s.session_id.slice(0, 8)}</span>
         </div>
         <div className="flex items-center gap-1.5 text-[9.5px] t-dim2">
-          <span style={{ color: "var(--text3)" }}>{AGENTS[agent].label}</span>
+          <span className="truncate" style={{ color: "var(--text3)" }}>{label}</span>
+          <span>· {AGENTS[agent].label}</span>
           <span style={{ color: modelColor(model) }}>· {model}</span>
           {noReplay && <span title="History is not replayed for this agent">· no replay</span>}
           <span>· {fmtAgo(s.last_seen)} ago</span>
@@ -620,7 +625,7 @@ function ResumePicker({ onPick, onClose }: { onPick: (s: SessionRollup) => void;
     return drivable.filter((s) =>
       // cwd included: with a worktree per card, the card id is in the checkout
       // path and nowhere else — searching "20343" has to find that session.
-      (`${s.project_path ?? ""} ${s.cwd_path ?? ""} ${s.source_app} ${s.session_id}`).toLowerCase().includes(needle));
+      (`${s.custom_title ?? ""} ${s.ai_title ?? ""} ${s.project_path ?? ""} ${s.cwd_path ?? ""} ${s.source_app} ${s.session_id}`).toLowerCase().includes(needle));
   }, [rows, q]);
 
   return (

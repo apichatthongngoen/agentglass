@@ -8,7 +8,7 @@ import type { ProviderUsage, AgentProbe } from "../../shared/types.ts";
 import type { UsagePayload } from "./usage.ts";
 import { getUsage } from "./usage.ts";
 import { windowLabel } from "../../shared/quota.ts";
-import { codexUsage } from "./codexusage.ts";
+import { codexUsageAll } from "./codexusage.ts";
 import { probeAgents } from "./agentprobe.ts";
 
 /**
@@ -155,7 +155,7 @@ export async function allProviderUsage(
   const show = installedProviders(probes);
   const rows: ProviderUsage[] = [];
   if (show.has("anthropic")) rows.push(await anthropic());
-  if (show.has("codex")) rows.push(codexUsage());
+  if (show.has("codex")) rows.push(...codexUsageAll());
   if (show.has("antigravity")) {
     rows.push({
       provider: "antigravity", label: "Antigravity", available: false,

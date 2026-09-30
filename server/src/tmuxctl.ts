@@ -90,6 +90,24 @@ export function tmuxClientPid(pid: number, depth = 0): number | null {
   return findTmuxBelow(pid, depth);
 }
 
+/**
+ * LOCAL PATCH (apichat 2026-09-23): the /proc stand-in for macOS.
+ *
+ * procchildren.ts already went portable (it walks `ps` off Linux), so on a Mac
+ * the panel now DETECTS the tmux under a shell — and then this module, still
+ * /proc-only, could not name its tty or socket. The result was the worst of
+ * both: tmux counted as active with no windows, which hides the panel's own
+ * tab strip and draws no tmux strip in its place, so "+ new terminal" was gone.
+ * Asked once per attach (resolveClient), so a `ps` spawn here is cheap.
+ * Re-apply after git pull.
+ */
+function psField(pid: number, field: string): string {
+  try {
+    const p = Bun.spawnSync(["ps", "-o", `${field}=`, "-p", String(pid)], { stdout: "pipe", stderr: "ignore", timeout: 2000 });
+    return p.exitCode === 0 ? p.stdout.toString().trim() : "";
+  } catch { return ""; }
+}
+
 /** The terminal a process is attached to, as tmux reports it in `client_tty`. */
 function ttyOf(pid: number): string | null {
   for (const fd of [0, 1, 2]) {
@@ -97,6 +115,11 @@ function ttyOf(pid: number): string | null {
       const link = readlinkSync(`/proc/${pid}/fd/${fd}`);
       if (link.startsWith("/dev/pts/") || link.startsWith("/dev/tty")) return link;
     } catch { /* fd closed or redirected — try the next one */ }
+  }
+  if (process.platform !== "linux") {
+    // `ps` prints the tty without /dev/ ("ttys003"), and "??" for none.
+    const t = psField(pid, "tty");
+    if (t && t !== "??" && t !== "?") return t.startsWith("/dev/") ? t : `/dev/${t}`;
   }
   return null;
 }
@@ -119,7 +142,14 @@ export function socketFromArgv(argv: string[]): string[] {
 function socketOf(pid: number): string[] {
   try {
     return socketFromArgv(readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean));
-  } catch { return []; }
+  } catch { /* no /proc — see psField */ }
+  if (process.platform !== "linux") {
+    // ponytail: `ps` gives the command line space-joined, so a -S path that
+    // itself contains a space is lost. -L names and ordinary socket paths are
+    // fine; parse `ps -o args` with quoting if that case ever shows up.
+    return socketFromArgv(psField(pid, "command").split(/\s+/).filter(Boolean));
+  }
+  return [];
 }
 /**
  * OBSERVE-ONLY: the switch that lets this module read the user's tmux and
@@ -2902,6 +2932,30 @@ export function focusPane(socket: string[], sessionId: string, windowId: string,
  * The id is checked against tmux's own syntax first, like every other id that
  * arrives from the UI.
  */
+/**
+ * LOCAL PATCH (apichat 2026-09-24): a pane's history in one read, for the
+ * panel's local scrollback view.
+ *
+ * Wheel scrolling through copy mode is a round trip and a full repaint per line,
+ * which stutters on localhost and lags behind the finger over a tunnel. The
+ * panel asks for the text once and scrolls it in the browser instead.
+ *
+ * Null when the wheel is not ours to take over: the app has the alternate
+ * screen or asked for the mouse (it gets the wheel, as tmux's own binding does),
+ * the pane is already in copy mode, or there is nothing above the screen.
+ * An empty id means the session's current pane — a window with one pane has no
+ * geometry on the client to pick it by. Read-only: capture-pane changes nothing.
+ */
+export function paneHistory(t: TmuxTarget, paneId: string): string | null {
+  const target = paneId || t.id;
+  if (paneId && !PANE_ID.test(paneId)) return null;
+  const st = tmux(t.socket, ["display-message", "-p", "-t", target, "#{alternate_on}#{mouse_any_flag}#{pane_in_mode} #{history_size}"])?.trim();
+  const [flags, size] = (st ?? "").split(" ");
+  if (flags !== "000" || !(Number(size) > 0)) return null;
+  // ponytail: last 5000 lines only; raise -S if history past that is wanted here.
+  return tmux(t.socket, ["capture-pane", "-p", "-e", "-t", target, "-S", "-5000"]);
+}
+
 export function selectPane(t: TmuxTarget, paneId: string): boolean {
   if (!PANE_ID.test(paneId)) return false;
   return tmux(t.socket, ["select-pane", "-t", paneId]) !== null;

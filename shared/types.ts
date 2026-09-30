@@ -593,7 +593,9 @@ export type PtyServerFrame =
   /** The server is refusing, and saying why — "that pane is gone", a disabled
    *  terminal, a shell that would not spawn. The one control frame the phone
    *  puts on screen verbatim, because it is an answer somebody can act on. */
-  | { t: "fatal"; error: string };
+  | { t: "fatal"; error: string }
+  /** LOCAL PATCH: answer to cmd "history"; null = let the wheel go to tmux. */
+  | { t: "history"; text: string | null };
 
 /**
  * The /terminal/pty protocol, client → server.
@@ -620,6 +622,8 @@ export type PtyClientFrame =
   /** Focus-follows-mouse inside tmux. The narrowest command here on purpose:
    *  it is the only one sent without a click behind it. */
   | { t: "tmux"; cmd: "selectpane"; pane: string }
+  /** LOCAL PATCH: a pane's history for the local scrollback view ("" = current pane). */
+  | { t: "tmux"; cmd: "history"; pane: string }
   /**
    * Move the pane's scrollback by `lines` — negative back into history.
    *

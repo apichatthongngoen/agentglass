@@ -156,7 +156,11 @@ export function UsageBox() {
             reports them — so this panel sizes to whatever it is given and the
             grid cell around it grows to match. A quota you have to scroll to
             find is a quota you will not look at. */}
-        {rows && rows.map((u, i) => <Row key={u.provider} u={u} first={i === 0} />)}
+        {/* LOCAL PATCH (apichat 2026-09-27): Antigravity never reports a quota,
+            so its row only ever said "Quota not reported" and cost the panel a
+            row of height. Other unavailable rows still show: theirs say how to
+            fix it. */}
+        {rows && rows.filter((u) => u.available || u.provider !== "antigravity").map((u, i) => <Row key={`${u.provider}:${u.label}`} u={u} first={i === 0} />)}
       </div>
     </Panel>
   );

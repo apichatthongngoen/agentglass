@@ -222,6 +222,8 @@ type Sess = {
   /** The panes of the tmux window on screen, when it has more than one. Empty
    *  otherwise — see the server's sweep. */
   tmuxPanes: TmuxPane[];
+  /** LOCAL PATCH: answer to a {cmd:"history"} request — see the wheel handler. */
+  onHistory?: (text: string | null) => void;
   /** The session those windows belong to, for the status-line toggle. */
   tmuxSession: string | null;
   /** The grid tmux thinks THIS client has — the terminal on this desk, not the
@@ -661,6 +663,8 @@ function connect(s: Sess) {
       // tab strip nobody can see until the next visibilitychange.
       ws.send(ptyFrame({ t: "visible", hidden: document.hidden }));
       notify(s);
+    } else if (f.t === "history") {
+      s.onHistory?.(f.text);
     } else if (f.t === "tmux") {
       s.tmuxEngine = f.engine === true;
       s.tmuxPopup = f.popup === true;
@@ -788,6 +792,12 @@ function createSession(root: string, agentTicket?: string): Sess {
     wordSeparator: tp.wordSeparator,
     theme: themeFromCss(),
     macOptionIsMeta: true,
+    // LOCAL PATCH (apichat 2026-09-22): Option+drag forces a real selection on
+    // macOS even while the program inside has mouse tracking on (tmux mouse on,
+    // a TUI). xterm only honours shiftKey for this on Linux/Windows; on macOS it
+    // reads altKey AND this option, which defaults to false — so on a Mac there
+    // was no way to select text out of a tmux pane. Re-apply after git pull.
+    macOptionClickForcesSelection: true,
   });
   // Before anything is written: the width table decides how many columns each
   // character claims, and a line already parsed under the old one keeps the
@@ -853,7 +863,26 @@ function createSession(root: string, agentTicket?: string): Sess {
 
   // Shift+Esc closes the panel — plain Esc belongs to the shell (vim, fzf…).
   term.attachCustomKeyEventHandler((e) => {
+    // LOCAL PATCH (apichat 2026-09-24): Shift+Enter = newline without sending.
+    // xterm sends a bare \r for it, same as Enter. ESC+CR is what Claude Code's
+    // /terminal-setup binds Shift+Enter to (Meta+Enter → newline in its prompt).
+    // The keypress that follows is swallowed too, or xterm would add its own \r.
+    if (e.key === "Enter" && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (e.type === "keydown") { e.preventDefault(); term.input("\x1b\r"); }
+      return false;
+    }
     if (e.type !== "keydown") return true;
+    // LOCAL PATCH (apichat 2026-09-26): Cmd+Left / Cmd+Right go to the start /
+    // end of the line, as in Terminal.app and iTerm. xterm leaves Cmd chords to
+    // the browser and sends nothing, so the cursor never moved. Ctrl+A / Ctrl+E
+    // are what readline, zsh and Claude Code's prompt all take for it.
+    // Cmd+Backspace deletes back to the start of the line, as iTerm does: Ctrl+U.
+    const CMD_KEYS: Record<string, string> = { ArrowLeft: "\x01", ArrowRight: "\x05", Backspace: "\x15" };
+    if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && CMD_KEYS[e.key]) {
+      e.preventDefault();
+      term.input(CMD_KEYS[e.key]!);
+      return false;
+    }
     if (e.key === "Escape" && e.shiftKey) { panelClose(); return false; }
     /*
      * Ctrl+Shift+C copies the branch — when there is nothing selected.
@@ -876,6 +905,113 @@ function createSession(root: string, agentTicket?: string): Sess {
     // the palette opens and the shell never hears about it.
     if (isAppChord(e)) return false;
     return true;
+  });
+  /*
+   * LOCAL PATCH (apichat 2026-09-24): wheel scrolling inside tmux.
+   *
+   * With `mouse on` the wheel is tmux's: every step is a mouse report, a trip to
+   * the server and a full repaint from copy mode. That stutters even on
+   * localhost and trails the finger over a tunnel. So the first wheel-up asks
+   * the server for the pane's history once (paneHistory) and shows it in a
+   * read-only terminal laid over this one, which the browser scrolls locally.
+   * Scrolling back to the bottom, or any key, puts the live pane back.
+   *
+   * When the server says no (the app owns the wheel, copy mode is already on,
+   * no history), the wheel falls back to mouse reports, one per line scrolled:
+   * xterm sends one report per wheel event however far it moved and tmux
+   * scrolled 5 lines per report, which was 5-line jumps (tmuxconf binds -N 1).
+   * Only for SGR reports, which tmux asks for; activeEncoding is xterm-private
+   * and reads undefined if renamed, which falls through to xterm's own path.
+   */
+  let wheelPart = 0;
+  let historyAsked = 0;       // when a request went out, 0 = none in flight
+  let reportsUntil = 0;       // server said no: plain reports until the wheel rests
+  let lastPointer = { x: 0, y: 0 };
+  const cellH = (r: DOMRect) => r.height / term.rows;
+  const sendReports = (n: number) => {
+    const screen = term.element?.querySelector(".xterm-screen");
+    if (!screen || !n) return;
+    const r = screen.getBoundingClientRect();
+    const cell = cellAt(r, term.cols, term.rows, lastPointer.x, lastPointer.y);
+    const col = cell ? cell.col + 1 : 1, row = cell ? cell.row + 1 : 1;
+    term.input(`\x1b[<${n < 0 ? 64 : 65};${col};${row}M`.repeat(Math.min(Math.abs(n), term.rows)), false);
+  };
+  const openHistory = (text: string, up: number) => {
+    const holderEl = term.element?.parentElement;
+    if (!holderEl) return false;
+    const box = document.createElement("div");
+    box.style.cssText = "position:absolute;inset:0;z-index:5;background:var(--bg)";
+    const tag = document.createElement("div");
+    tag.textContent = "history · scroll to the bottom or press a key to return";
+    tag.style.cssText = "position:absolute;top:4px;right:12px;z-index:6;font:11px system-ui;opacity:.6;pointer-events:none;color:var(--text,inherit)";
+    holderEl.style.position = "relative";
+    holderEl.append(box, tag);
+    const ov = new Terminal({
+      fontFamily: term.options.fontFamily, fontSize: term.options.fontSize, lineHeight: term.options.lineHeight,
+      theme: term.options.theme, cols: term.cols, rows: term.rows, scrollback: 6000,
+      disableStdin: true, cursorInactiveStyle: "none", macOptionClickForcesSelection: true,
+    });
+    ov.open(box);
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      ov.dispose(); box.remove(); tag.remove();
+      term.focus();
+    };
+    ov.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown" || ["Shift", "Control", "Alt", "Meta"].includes(e.key)) return true;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && ov.hasSelection()) return true;
+      close();
+      return false;
+    });
+    ov.onSelectionChange(() => {
+      const sel = ov.getSelection();
+      if (sel && copyOnSelect()) navigator.clipboard?.writeText(sel).catch(() => { /* no permission */ });
+    });
+    ov.write(text.replace(/\n$/, "").replace(/\n/g, "\r\n"), () => {
+      ov.scrollToBottom();
+      ov.scrollLines(-Math.max(1, up));
+      ov.onScroll((y) => { if (y >= ov.buffer.active.baseY) close(); });
+      ov.focus();
+    });
+    return true;
+  };
+  // Filled in once `sess` exists; the message handler calls it on {t:"history"}.
+  const onHistory = (text: string | null) => {
+    const up = Math.max(1, -Math.trunc(wheelPart));
+    historyAsked = 0;
+    if (text && openHistory(text, up)) { wheelPart = 0; return; }
+    reportsUntil = Date.now() + 600;
+    const n = Math.trunc(wheelPart);
+    wheelPart -= n;
+    sendReports(n);
+  };
+  term.attachCustomWheelEventHandler((e) => {
+    const enc = (term as unknown as { _core?: { coreMouseService?: { activeEncoding?: string } } })._core?.coreMouseService?.activeEncoding;
+    if (term.modes.mouseTrackingMode === "none" || enc !== "SGR" || e.deltaY === 0 || e.shiftKey) return true;
+    const screen = term.element?.querySelector(".xterm-screen");
+    if (!screen) return true;
+    e.preventDefault();
+    lastPointer = { x: e.clientX, y: e.clientY };
+    const r = screen.getBoundingClientRect();
+    wheelPart += e.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? e.deltaY / cellH(r)
+      : e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY : e.deltaY * term.rows;
+    const now = Date.now();
+    if (historyAsked && now - historyAsked < 1500) return false; // answer pending: keep accumulating
+    if (e.deltaY < 0 && sess.tmux && now > reportsUntil && sess.ws?.readyState === WebSocket.OPEN) {
+      const cell = cellAt(r, term.cols, term.rows, e.clientX, e.clientY);
+      const pane = cell && sess.tmuxPanes.length > 1 ? paneAt(sess.tmuxPanes, cell.col, cell.row) : null;
+      historyAsked = now;
+      sess.onHistory = onHistory;
+      sess.ws.send(ptyFrame({ t: "tmux", cmd: "history", pane: pane?.id ?? "" }));
+      return false;
+    }
+    if (reportsUntil) reportsUntil = now + 600;
+    const n = Math.trunc(wheelPart);
+    wheelPart -= n;
+    sendReports(n);
+    return false;
   });
   // Copy on select, the tmux way: the instant a selection is made it is on the
   // clipboard — no Ctrl+Shift+C, no right-click menu (a terminal has none), no
@@ -920,6 +1056,32 @@ function createSession(root: string, agentTicket?: string): Sess {
       .then((text) => { if (text) sess.ws?.send(JSON.stringify({ t: "d", d: text })); })
       .catch(() => { /* no clipboard permission — the menu stayed shut, nothing pasted */ });
   });
+  /*
+   * LOCAL PATCH (apichat 2026-09-23): a pasted image becomes a path.
+   *
+   * xterm only pastes text, and the CLI in the pane reads images from the
+   * clipboard of the machine it runs on — which, for a remote server, is not
+   * the machine the browser is on. So an image in the paste event is uploaded
+   * to the server, saved there, and its path is pasted instead; Claude Code
+   * turns a pasted image path into an attachment. Capture phase, so this sees
+   * the event before xterm's textarea does. A paste that carries plain text is
+   * left alone, so copying text out of anything behaves exactly as before.
+   * See server/src/pasteimage.ts.
+   */
+  holder.addEventListener("paste", (e) => {
+    const items = [...((e as ClipboardEvent).clipboardData?.items ?? [])];
+    if (items.some((i) => i.kind === "string" && i.type === "text/plain")) return;
+    const blob = items.find((i) => i.kind === "file" && i.type.startsWith("image/"))?.getAsFile();
+    if (!blob) return;
+    e.preventDefault();
+    e.stopPropagation();
+    api.pasteImage(blob)
+      .then((r) => {
+        if (r.ok && r.path) term.paste(r.path + " ");
+        else console.warn("[agentglass] image paste refused:", r.error);
+      })
+      .catch((err) => console.warn("[agentglass] image paste failed:", err));
+  }, true);
   const id = `t${++seq}-${Date.now().toString(36)}`;
   const sess: Sess = { id, root, title: `shell ${sessionsFor(root).length + 1}`, term, fit, search, holder, ws: null, status: "idle", mode: null, shell: "shell", canResize: true, opened: false, tmux: false, openFail: null, agentTicket: agentTicket ?? null, tmuxWindows: [], tmuxSessions: [], tmuxPanes: [], tmuxSession: null, tmuxClient: null, tmuxPrefix: [], tmuxPhones: 0, tmuxPrefixAt: 0, pending: [], createdAt: Date.now(), lastUsed: Date.now(), retries: 0, retryTimer: null, subs: new Set() };
   term.onData((d) => {
@@ -3400,7 +3562,7 @@ export function TermView({ active, onClose = () => {} }: { active: boolean; onCl
                           }}
                           onDoubleClick={() => setRenaming(w.id)}
                           title={`${w.name || "shell"} — window ${w.index}${w.flags ? ` (${w.flags})` : ""}${w.status ? `, agent ${STATUS_WORDS[w.status]}` : ""}${w.pinned && tabGroups ? ", pinned first in its group" : ""}. Double-click to rename, drag to reorder${groupsOn ? ", right-click to pin or regroup" : ""}`}
-                          className={`group flex items-center gap-1.5 px-1 py-px text-[10.5px] cursor-pointer shrink-0 transition-colors${w.id === activeWindow ? " font-semibold" : ""}`}
+                          className={`group flex items-center gap-1.5 px-2.5 py-1 text-[12px] cursor-pointer shrink-0 rounded transition-colors${w.id === activeWindow ? " font-semibold" : ""}`}
                           style={{
                             ...(w.id === activeWindow ? { color: "var(--primary-hover)" } : { color: "var(--text2)" }),
                             // The tab being carried fades; the one it would land
@@ -3547,7 +3709,7 @@ export function TermView({ active, onClose = () => {} }: { active: boolean; onCl
                               // is a label and a drop target, not a button.
                               <span
                                 {...dropOnGroup(g)}
-                                className="shrink-0 flex items-center gap-0.5 ml-1 pl-2 pr-0.5 text-[10px] rounded-sm"
+                                className="shrink-0 flex items-center gap-0.5 ml-1 pl-2.5 pr-1 py-1 text-[12px] rounded-sm"
                                 style={{
                                   color: "var(--text3)", minHeight: MIN_BOX,
                                   borderLeft: "1px solid color-mix(in srgb, var(--border) 45%, transparent)",
@@ -3561,7 +3723,7 @@ export function TermView({ active, onClose = () => {} }: { active: boolean; onCl
                               <button
                                 {...dropOnGroup(g)}
                                 onClick={() => toggleKeptOpen(g.key)}
-                                className="shrink-0 flex items-center gap-0.5 ml-1 pl-2 pr-0.5 text-[10px] rounded-sm"
+                                className="shrink-0 flex items-center gap-0.5 ml-1 pl-2.5 pr-1 py-1 text-[12px] rounded-sm"
                                 style={{
                                   color: "var(--text4)", cursor: "pointer", minHeight: MIN_BOX,
                                   borderLeft: "1px solid color-mix(in srgb, var(--border) 45%, transparent)",

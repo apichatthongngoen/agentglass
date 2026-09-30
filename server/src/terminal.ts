@@ -491,7 +491,7 @@ import { recall, remember, SETTLE_MS } from "./tmuxmemory.ts";
 import { deskAttachArgv } from "./tmuxctl.ts";
 import { forgetSession } from "./tmuxrestore.ts";
 import { setLocked, lockedSessions } from "./tmuxlock.ts";
-import { focusPaneAnywhere, switchClientToSession, killSessionByName, resolveClient, readFrameCached, runAction, setStatusLine, releaseStale, clearAsk, prefixKeys, healPrefix, paneCwd, selectPane, attachArgvFor, restoreWindows, endPhoneSession, phoneWindows, fitWindow, reclaimPinnedWindow, windowSize, socketPath, scrollPhonePane, leaveCopyMode, remountPhoneClient, isPhoneSession, phonesAttached, redrawClient, sessionNameOf, type TmuxClient, type TmuxTarget, type TmuxAction } from "./tmuxctl.ts";
+import { focusPaneAnywhere, switchClientToSession, killSessionByName, resolveClient, readFrameCached, runAction, setStatusLine, releaseStale, clearAsk, prefixKeys, healPrefix, paneCwd, selectPane, attachArgvFor, restoreWindows, endPhoneSession, phoneWindows, fitWindow, reclaimPinnedWindow, windowSize, socketPath, scrollPhonePane, paneHistory, leaveCopyMode, remountPhoneClient, isPhoneSession, phonesAttached, redrawClient, sessionNameOf, type TmuxClient, type TmuxTarget, type TmuxAction } from "./tmuxctl.ts";
 import { paneStatus, markSeen } from "./agentdone.ts";
 import { worstStatus } from "../../shared/windowStatus.ts";
 import { windowRepo } from "./windowrepo.ts";
@@ -1992,6 +1992,11 @@ export function ptyMessage(ws: PtyWs, raw: string | Buffer) {
      * one sent without a click behind it, which is exactly why it is kept
      * unable to do anything a hover should not.
      */
+    // LOCAL PATCH (apichat 2026-09-24): see paneHistory.
+    if (msg.cmd === "history") {
+      ctl(ws, { t: "history", text: s.tmux && typeof msg.pane === "string" ? paneHistory(s.tmux, msg.pane) : null });
+      return;
+    }
     if (msg.cmd === "selectpane") {
       if (s.tmux && typeof msg.pane === "string") selectPane(s.tmux, msg.pane);
       return;
