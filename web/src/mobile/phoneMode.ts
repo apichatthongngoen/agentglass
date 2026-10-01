@@ -37,13 +37,32 @@ export function initPhone(): boolean {
   // visual viewport does. --kb is how much of the screen the keyboard covers,
   // and phone.css takes it off the app's height so the prompt stays in view.
   const vv = window.visualViewport;
-  const setKb = () => {
-    const kb = vv ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
-    document.documentElement.style.setProperty("--kb", `${kb}px`);
-    if (kb > 0) window.scrollTo(0, 0);
+  if (!vv) return true;
+  const root = document.documentElement;
+  let last = -1;
+  const setKb = (pin: boolean) => {
+    const kb = keyboardInset(root.clientHeight, vv.height, vv.offsetTop);
+    if (kb !== last) { last = kb; root.style.setProperty("--kb", `${kb}px`); }
+    // iOS scrolls the page up to keep the caret visible; with the app already
+    // shrunk above the keyboard that only pushes the TopBar off screen.
+    if (pin && kb > 0) window.scrollTo(0, 0);
   };
-  vv?.addEventListener("resize", setKb);
-  vv?.addEventListener("scroll", setKb);
-  setKb();
+  vv.addEventListener("resize", () => setKb(true));
+  vv.addEventListener("scroll", () => setKb(false));
+  setKb(true);
   return true;
+}
+
+/**
+ * How much of the layout viewport the on-screen keyboard covers. Pure.
+ *
+ * clientHeight, not innerHeight: innerHeight counts a scrollbar and the visual
+ * viewport does not, so on a desktop ?ui=phone window a scrollbar would read
+ * as a keyboard and the height it takes off could make the scrollbar come and
+ * go. Anything under KEYBOARD_MIN is a scrollbar or rounding, never a keyboard.
+ */
+export const KEYBOARD_MIN = 80;
+export function keyboardInset(layoutH: number, visualH: number, visualTop: number): number {
+  const raw = layoutH - visualH - visualTop;
+  return raw >= KEYBOARD_MIN ? Math.round(raw) : 0;
 }

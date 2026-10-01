@@ -1,6 +1,6 @@
 // LOCAL PATCH (apichat 2026-10-01): covers web/src/mobile/phoneMode.ts.
 import { describe, expect, test } from "bun:test";
-import { pickUi } from "../src/mobile/phoneMode.ts";
+import { keyboardInset, pickUi } from "../src/mobile/phoneMode.ts";
 
 describe("pickUi", () => {
   test("?ui=phone forces phone mode and is remembered", () => {
@@ -23,5 +23,20 @@ describe("pickUi", () => {
   });
   test("an unknown ?ui value is ignored", () => {
     expect(pickUi("?ui=bogus", null, false, false)).toEqual({ phone: false, save: null });
+  });
+});
+
+describe("keyboardInset", () => {
+  test("no keyboard", () => {
+    expect(keyboardInset(844, 844, 0)).toBe(0);
+  });
+  test("a scrollbar is not a keyboard", () => {
+    expect(keyboardInset(717, 702, 0)).toBe(0);
+  });
+  test("the iOS keyboard", () => {
+    expect(keyboardInset(844, 508, 0)).toBe(336);
+  });
+  test("a page iOS scrolled up is measured from the visual top", () => {
+    expect(keyboardInset(844, 508, 120)).toBe(216);
   });
 });
