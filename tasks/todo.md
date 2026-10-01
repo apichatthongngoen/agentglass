@@ -11,7 +11,7 @@
 
 ## Phase B — usable on a phone screen
 - [x] T4 PhoneTabBar (dash/term/chat/lantern) + bottom safe area — mounted in `App.tsx`
-- [ ] T5 Terminal KeyBar — `mobile/keys.ts`, `mobile/KeyBar.tsx`, `typeIntoFocused` in `TerminalPanel.tsx`
+- [x] T5 Terminal KeyBar — `mobile/keys.ts`, `mobile/KeyBar.tsx`, `typeIntoFocused` in `TerminalPanel.tsx`
 - [ ] Checkpoint B — quota, chat, gate from TopBar chip, terminal + keys on iPhone
 
 ## Phase C — Web Push

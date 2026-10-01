@@ -71,6 +71,7 @@ import { sharedPhase } from "../lib/sharedPhase.ts";
 import { StatusMark, STATUS_COLOR } from "./terminal/StatusMark.tsx";
 import { STATUS_WORDS } from "../../../shared/windowStatus.ts";
 import { buildGroups, openGroups, parseRules, setOpenGroups, subscribeTabGroups, tabGroupRulesText, tabGroupsOn, tabGroupsVersion, worthGrouping, type TabGroup } from "../lib/tabGroups.ts";
+import { keyBytes, type KeyName } from "../mobile/keys.ts";
 
 const ROOT_KEY = "agentglass.terminalRoot";
 /** The repo the terminal view last used — what a docked console should open
@@ -285,6 +286,17 @@ function keyByte(k: string): string | null {
 const keyLabel = (k: string) => (/^C-.$/.test(k) ? `^${k.slice(2).toLowerCase()}` : k);
 
 const sessions = new Map<string, Sess>();
+// LOCAL PATCH (apichat 2026-10-01): the phone key bar (mobile/KeyBar.tsx)
+// types into whichever shell was touched last. term.input() goes through
+// onData exactly like a keystroke, the same road the Cmd+arrow keys take.
+let lastFocused: Sess | null = null;
+export function typeIntoFocused(k: KeyName): boolean {
+  const s = lastFocused;
+  if (!s || !sessions.has(s.id)) return false;
+  s.term.input(keyBytes(k, s.term.modes.applicationCursorKeysMode));
+  s.term.focus();
+  return true;
+}
 let seq = 0;
 /** Shells for one repo, in creation order. */
 const sessionsFor = (root: string) => [...sessions.values()].filter((s) => s.root === root).sort((a, b) => a.createdAt - b.createdAt);
@@ -1119,6 +1131,7 @@ function createSession(root: string, agentTicket?: string): Sess {
     if (sess.ws?.readyState === WebSocket.OPEN) sess.ws.send(ptyFrame({ t: "resize", cols, rows }));
   });
   sessions.set(id, sess);
+  holder.addEventListener("focusin", () => { lastFocused = sess; }); // LOCAL PATCH: see typeIntoFocused
   return sess;
 }
 
