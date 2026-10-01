@@ -1,3 +1,5 @@
+import { watchFreshness } from "./freshness.ts";
+
 /**
  * Phone mode: the installed iPhone app, or any window forced with ?ui=phone.
  *
@@ -33,6 +35,8 @@ export function initPhone(): boolean {
   PHONE = r.phone;
   if (!PHONE) return false;
   document.documentElement.dataset.phone = "1";
+  // No reload button in an installed app: pick up a deploy on the way back in.
+  watchFreshness();
   // iOS does not shrink the layout viewport for the on-screen keyboard; the
   // visual viewport does. --kb is how much of the screen the keyboard covers,
   // and phone.css takes it off the app's height so the prompt stays in view.
