@@ -18,7 +18,7 @@
 - [ ] T6 (human ops) CF Access Bypass app `agentglass-dev-static` for manifest + icons; `AGENTGLASS_PUSH_SUBJECT` on dev12
 - [x] T7 Restore `push.ts`/`pushstore.ts` + tests from `b35c3fd6^`; new `phonepush.ts`
 - [x] T8 `deliver()` hook before the live cut-off; `/push/key|subscribe|unsubscribe|test` routes (server restart — ask first)
-- [ ] T9 `public/sw.js`, `mobile/push.ts`, `PushToggle` in the tab bar
+- [x] T9 `public/sw.js`, `mobile/push.ts`, `PushToggle` in the tab bar
 - [ ] Checkpoint C — locked-phone push for blocked/idle/stalled/autopilot with the Mac dashboard open
 
 ## Phase D — docs
