@@ -19,14 +19,14 @@ export function pairTicketFrom(text: string): string | null {
  * The origin the pairing panel should offer, or "" to leave upstream's rule
  * (LAN-exposed only) in charge. Pure.
  *
- * Only a loopback page can mint a ticket: /pair/ticket answers "only this
- * machine can do that" unless the request comes from the machine itself, and
- * a request through the Cloudflare Tunnel does not — cloudflared forwards the
- * caller's own address. So the desk side of pairing is a browser on an
- * `ssh -L <port>:127.0.0.1:4000` forward, and the QR's host does not matter:
+ * /pair/ticket only mints for the machine itself (atMachine): a loopback page,
+ * or — with the local server patch — the deployment's public https name
+ * (AGENTGLASS_ALLOWED_HOSTS behind a Cloudflare Tunnel) holding the machine
+ * token. A plain-http LAN address is neither. The QR's host does not matter:
  * the phone pastes the link and pairTicketFrom keeps only the ticket.
  */
 export function pairPanelOrigin(hostname: string, origin: string): string {
   const h = hostname.replace(/^\[|\]$/g, "");
-  return h === "localhost" || h === "::1" || /^127\./.test(h) ? origin : "";
+  if (h === "localhost" || h === "::1" || /^127\./.test(h)) return origin;
+  return origin.startsWith("https://") ? origin : "";
 }

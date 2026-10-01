@@ -146,9 +146,9 @@ export function RemoteAccessPane({ open }: { open: boolean }) {
   const pick = Math.min(pickIndex(pairAddrs, chosen), Math.max(0, pairAddrs.length - 1));
   // LOCAL PATCH (apichat 2026-10-01): dev12 stays bound to loopback behind a
   // Cloudflare Tunnel, so `exposed`/`trustLan` are false and this panel stayed
-  // hidden. Only a loopback page can mint a ticket (atMachine), so it shows on
-  // one — an `ssh -L` forward to the box — with that page's own origin; the
-  // phone pastes the link and keeps only the ticket. See mobile/pairPaste.ts.
+  // hidden. It shows wherever atMachine lets a ticket be minted — a loopback
+  // page, or the tunnel's https name — with that page's own origin; the phone
+  // pastes the link and keeps only the ticket. See mobile/pairPaste.ts.
   const publicOrigin = pairPanelOrigin(location.hostname, location.origin);
   const url = publicOrigin || (pairUrls[pick] ?? "");
   const address = pairAddrs[pick];

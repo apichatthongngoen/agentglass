@@ -4798,6 +4798,16 @@ async function handleServerRequest(req: Request, srv: Server<WsData>): Promise<R
      */
     const atMachine = (): boolean => {
       const ip = clientIp ?? null;
+      // LOCAL PATCH (apichat 2026-10-01): the owner pairing a phone through a
+      // Cloudflare Tunnel. cloudflared dials this server over loopback and
+      // forwards the caller's own address, so the request reads as remote. One
+      // that arrived on a loopback socket, for a Host this deployment named in
+      // AGENTGLASS_ALLOWED_HOSTS, carrying the machine token, has also passed
+      // Cloudflare Access (only static files bypass it) — it is the owner at
+      // their own desk. Never without a configured token.
+      const viaNamedProxy = !!AUTH_TOKEN && !!peerSock?.address && isLoopback(peerSock.address)
+        && ALLOWED_HOSTS.has(url.hostname.toLowerCase());
+      if (viaNamedProxy) return tokenOk(req, url, AUTH_TOKEN!);
       if (!ip || !isLoopback(ip)) return false;
       return !AUTH_TOKEN || tokenOk(req, url, AUTH_TOKEN);
     };
