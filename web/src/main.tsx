@@ -13,6 +13,8 @@ import { followServerChanges } from "./lib/desktop.ts";
 import { applyTheme, initialTheme, watchThemeStorage, watchSystemTheme, watchDesktopPalette } from "./lib/themes.ts";
 import { restoreScale } from "./lib/uiScale.ts";
 import "./index.css";
+import { initPhone } from "./mobile/phoneMode.ts";
+import "./mobile/phone.css"; // LOCAL PATCH: after index.css, so equal-specificity rules win
 import "./fonts.ts"; // bundled monospace faces — see fonts.ts
 
 // Restoring browser state paints this document only. Machine-wide theme output
@@ -29,6 +31,9 @@ watchDesktopPalette();
 // on every start. Fire-and-forget: it resolves a tick later and the window
 // reflows into it, which is far less jarring than blocking the first paint.
 restoreScale();
+// LOCAL PATCH (apichat 2026-10-01): decide phone mode before the first mount,
+// so the first paint already has html[data-phone] — see mobile/phoneMode.ts.
+initPhone();
 
 /*
  * There is one application now.

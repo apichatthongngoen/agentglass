@@ -1,0 +1,14 @@
+/* Phone mode only (mobile/phoneMode.ts) — every rule is scoped under
+   html[data-phone], so the desktop never sees any of this. */
+html[data-phone], html[data-phone] body { overscroll-behavior: none; }
+
+/* App's root is `<div class="h-screen …">`, the first child of #root (main.tsx
+   mounts it inside a fragment). dvh, not vh: on iOS vh includes the area under
+   the browser chrome. --kb is the on-screen keyboard. */
+html[data-phone] #root > .h-screen {
+  height: calc(100dvh - var(--kb, 0px));
+  padding-top: env(safe-area-inset-top);
+}
+
+/* The rail (ViewRail.tsx) is replaced by mobile/PhoneTabBar.tsx. */
+html[data-phone] nav[aria-label="Workspace views"] { display: none; }
