@@ -38,15 +38,23 @@ export function initPhone(): boolean {
   // No reload button in an installed app: pick up a deploy on the way back in.
   watchFreshness();
   // iOS does not shrink the layout viewport for the on-screen keyboard; the
-  // visual viewport does. --kb is how much of the screen the keyboard covers,
-  // and phone.css takes it off the app's height so the prompt stays in view.
+  // visual viewport does. While it is up, --app-h is the visible height and
+  // phone.css sizes the app to it, so the prompt stays in view.
   const vv = window.visualViewport;
   if (!vv) return true;
   const root = document.documentElement;
   let last = -1;
   const setKb = (pin: boolean) => {
     const kb = keyboardInset(root.clientHeight, vv.height, vv.offsetTop);
-    if (kb !== last) { last = kb; root.style.setProperty("--kb", `${kb}px`); root.toggleAttribute("data-kb", kb > 0); }
+    if (kb !== last) {
+      last = kb;
+      root.toggleAttribute("data-kb", kb > 0);
+      // With the keyboard up the app is exactly the part still visible; with it
+      // down, phone.css falls back to 100vh — see the note there for why not
+      // dvh or the layout viewport.
+      if (kb > 0) root.style.setProperty("--app-h", `${Math.round(vv.height)}px`);
+      else root.style.removeProperty("--app-h");
+    }
     // iOS scrolls the page up to keep the caret visible; with the app already
     // shrunk above the keyboard that only pushes the TopBar off screen.
     if (pin && kb > 0) window.scrollTo(0, 0);
