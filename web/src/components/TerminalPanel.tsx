@@ -72,6 +72,8 @@ import { StatusMark, STATUS_COLOR } from "./terminal/StatusMark.tsx";
 import { STATUS_WORDS } from "../../../shared/windowStatus.ts";
 import { buildGroups, openGroups, parseRules, setOpenGroups, subscribeTabGroups, tabGroupRulesText, tabGroupsOn, tabGroupsVersion, worthGrouping, type TabGroup } from "../lib/tabGroups.ts";
 import { keyBytes, type KeyName } from "../mobile/keys.ts";
+import { PHONE } from "../mobile/phoneMode.ts";
+import { quietDeviceAttributes } from "../mobile/terminalQuiet.ts";
 
 const ROOT_KEY = "agentglass.terminalRoot";
 /** The repo the terminal view last used — what a docked console should open
@@ -834,6 +836,9 @@ function createSession(root: string, agentTicket?: string): Sess {
   // and then xterm 6.0.0 throws inside its own parser and the screen stops
   // updating. See xtermDecrqm.
   answerDecrqm(term as never);
+  // LOCAL PATCH (apichat 2026-10-02): on the phone a late DA reply ends up typed
+  // into the shell by tmux — see mobile/terminalQuiet.ts.
+  if (PHONE) quietDeviceAttributes(term as never);
   // A pull request or a ClickUp card opens in the app; Ctrl/Cmd-click still
   // goes to the browser. See linkRouter.ts.
   term.loadAddon(new WebLinksAddon((e, uri) => { followLink(uri, e); }));

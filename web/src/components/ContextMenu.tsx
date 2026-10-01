@@ -27,7 +27,10 @@ export function ContextMenu({ x, y, onClose, children }: { x: number; y: number;
     if (!el) return;
     const r = el.getBoundingClientRect();
     setPos({
-      x: Math.min(x, window.innerWidth - r.width - 8),
+      // LOCAL PATCH (apichat 2026-10-02): clamp the left edge too. An anchor that
+      // is scrolled partly out of view (the terminal tab strip on a phone) has a
+      // negative left, and the menu opened half off the screen.
+      x: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)),
       y: Math.max(8, Math.min(y, window.innerHeight - r.height - 8)),
     });
   }, [x, y]);
