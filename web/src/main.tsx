@@ -7,13 +7,13 @@ import App from "./App.tsx";
 import { PairScreen } from "./PairScreen.tsx";
 import { LaneHost } from "./components/LaneHost.tsx";
 import { laneFromHash, laneIsEphemeral, laneProfileFromHash } from "./lib/lane.ts";
-import { adoptServer } from "./lib/api.ts";
+import { adoptServer, hasToken, reauthPrompt } from "./lib/api.ts";
 import { ticketFromUrl, clearTicketFromUrl } from "./lib/pairing.ts";
 import { followServerChanges } from "./lib/desktop.ts";
 import { applyTheme, initialTheme, watchThemeStorage, watchSystemTheme, watchDesktopPalette } from "./lib/themes.ts";
 import { restoreScale } from "./lib/uiScale.ts";
 import "./index.css";
-import { initPhone } from "./mobile/phoneMode.ts";
+import { initPhone, PHONE } from "./mobile/phoneMode.ts";
 import "./mobile/phone.css"; // LOCAL PATCH: after index.css, so equal-specificity rules win
 import "./fonts.ts"; // bundled monospace faces — see fonts.ts
 
@@ -100,5 +100,9 @@ if (lane) {
     />
   );
 } else {
+  // LOCAL PATCH (apichat 2026-10-01): the installed phone app starts with no
+  // credential, and with no token at all useLive never reaches "unauthorized"
+  // (it only probes while one is held), so nothing would ever ask for one.
+  if (PHONE && !hasToken()) reauthPrompt();
   mount(<App />);
 }

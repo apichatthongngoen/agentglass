@@ -5,7 +5,7 @@
 
 ## Phase A — install, pair, stay logged in
 - [x] T1 Phone mode foundation — `mobile/phoneMode.ts`, `mobile/phone.css`, `main.tsx`, `index.html` viewport-fit
-- [ ] T2 Pair over HTTPS — `RemoteAccessPane.tsx` (live when https), `reauthPrompt` accepts a pair link, first-launch prompt in `main.tsx`
+- [x] T2 Pair over HTTPS — `RemoteAccessPane.tsx` (live when https), `reauthPrompt` accepts a pair link, first-launch prompt in `main.tsx`
 - [ ] T3 Access-expiry recovery — `mobile/accessExpiry.ts`, `useLive.ts` onclose
 - [ ] Checkpoint A — deploy dev12 (web only), install + pair on iPhone, reopen stays LIVE
 

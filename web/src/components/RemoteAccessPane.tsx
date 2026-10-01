@@ -143,9 +143,15 @@ export function RemoteAccessPane({ open }: { open: boolean }) {
   const pairAddrs = st.addresses;
   const pairUrls = st.urls;
   const pick = Math.min(pickIndex(pairAddrs, chosen), Math.max(0, pairAddrs.length - 1));
-  const url = pairUrls[pick] ?? "";
+  // LOCAL PATCH (apichat 2026-10-01): reached over a public HTTPS name (a
+  // Cloudflare Tunnel behind Access), the page's own origin is the address a
+  // phone pairs over. The server itself stays bound to loopback, so
+  // `exposed`/`trustLan` are false and the panel below used to stay hidden.
+  // Accepting still needs a browser-vouched Origin (mayReleaseAHold).
+  const publicOrigin = location.protocol === "https:" ? location.origin : "";
+  const url = publicOrigin || (pairUrls[pick] ?? "");
   const address = pairAddrs[pick];
-  const live = st.exposed && st.trustLan && pairUrls.length > 0;
+  const live = !!publicOrigin || (st.exposed && st.trustLan && pairUrls.length > 0);
   const seen = st.devices.filter((d) => !d.self);
   /*
    * Nothing has ever connected AND nothing is paired: there is exactly one

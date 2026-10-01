@@ -118,6 +118,7 @@ export type RunActivityResult = { ok: boolean; run?: Run; legs: LegActivity[]; e
 
 import { DEPS, type DepsResponse } from "../../../shared/deps.ts";
 import * as demo from "./demo.ts";
+import { pairTicketFrom } from "../mobile/pairPaste.ts";
 
 export const IS_DEMO = demo.IS_DEMO;
 
@@ -485,11 +486,16 @@ export async function probeAuth(): Promise<"ok" | "unauthorized" | "offline"> {
 export function reauthPrompt(): void {
   if (typeof window === "undefined") return;
   // eslint-disable-next-line no-alert -- see the note above; the lint has a named exception too
-  const t = window.prompt("This server needs an access token.\nPaste it to reconnect:");
-  if (t && t.trim()) {
-    try { localStorage.setItem("agentglass_token", t.trim()); } catch { /* private mode */ }
-    location.reload();
-  }
+  const t = window.prompt("This server needs an access token or a pair link.\nPaste it to connect:");
+  if (!t || !t.trim()) return;
+  // LOCAL PATCH (apichat 2026-10-01): an installed iPhone app cannot be opened
+  // by a link — the camera and Messages open Safari — so the pair link is
+  // pasted here and re-entered on this app's own origin, which keeps the
+  // handshake inside the app that will hold the credential.
+  const ticket = pairTicketFrom(t);
+  if (ticket) { location.href = `${location.origin}/?pair=${encodeURIComponent(ticket)}`; return; }
+  try { localStorage.setItem("agentglass_token", t.trim()); } catch { /* private mode */ }
+  location.reload();
 }
 
 export let WS_URL = withToken(SERVER.replace(/^http/, "ws") + "/stream");
