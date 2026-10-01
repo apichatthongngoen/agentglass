@@ -73,7 +73,9 @@ export function ViewHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className={viewHeaderClass} style={viewHeaderStyle}>
+    // LOCAL PATCH (apichat 2026-10-01): data-view-header is what mobile/phone.css
+    // un-pins, so the bar can wrap on a phone instead of spilling over the TopBar.
+    <div className={viewHeaderClass} style={viewHeaderStyle} data-view-header>
       <h2 className="sr-only">{label}</h2>
       {children}
       {actions && <div className="ml-auto flex items-center gap-2 shrink-0">{actions}</div>}

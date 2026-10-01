@@ -3,12 +3,41 @@
 html[data-phone], html[data-phone] body { overscroll-behavior: none; }
 
 /* App's root is `<div class="h-screen …">`, the first child of #root (main.tsx
-   mounts it inside a fragment). dvh, not vh: on iOS vh includes the area under
-   the browser chrome. --kb is the on-screen keyboard. */
+   mounts it inside a fragment). Pinned to the layout viewport rather than
+   sized in vh/dvh: in an installed iOS app with a translucent status bar,
+   100dvh came out a status bar short and left a blank strip under the tab
+   bar. --kb is the on-screen keyboard. */
 html[data-phone] #root > .h-screen {
-  height: calc(100dvh - var(--kb, 0px));
+  position: fixed;
+  inset: 0 0 var(--kb, 0px) 0;
+  height: auto;
   padding-top: env(safe-area-inset-top);
 }
 
 /* The rail (ViewRail.tsx) is replaced by mobile/PhoneTabBar.tsx. */
 html[data-phone] nav[aria-label="Workspace views"] { display: none; }
+
+/* While typing, the keyboard and the key bar need the room; the tab bar comes
+   back when the keyboard goes. data-kb is set by phoneMode.ts. */
+html[data-phone][data-kb] nav[aria-label="Phone views"] { display: none; }
+
+/* View headers are one pinned row on a desk (inline height); on a phone their
+   pieces wrap onto more rows instead of squeezing into slivers. */
+html[data-phone] [data-view-header] {
+  height: auto !important;
+  max-height: none !important;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  padding: 8px 12px;
+}
+html[data-phone] [data-view-header] > * { flex-shrink: 0; max-width: 100%; }
+
+/* Chat: the open-chats list above the conversation, not beside it. */
+html[data-phone] [data-chat-split] { flex-direction: column; }
+html[data-phone] [data-chat-sidebar] {
+  width: 100% !important;
+  max-height: 7.5rem;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--surface-line);
+}
+html[data-phone] [aria-label="Resize the list"] { display: none; }

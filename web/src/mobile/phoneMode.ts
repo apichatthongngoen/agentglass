@@ -42,7 +42,7 @@ export function initPhone(): boolean {
   let last = -1;
   const setKb = (pin: boolean) => {
     const kb = keyboardInset(root.clientHeight, vv.height, vv.offsetTop);
-    if (kb !== last) { last = kb; root.style.setProperty("--kb", `${kb}px`); }
+    if (kb !== last) { last = kb; root.style.setProperty("--kb", `${kb}px`); root.toggleAttribute("data-kb", kb > 0); }
     // iOS scrolls the page up to keep the caret visible; with the app already
     // shrunk above the keyboard that only pushes the TopBar off screen.
     if (pin && kb > 0) window.scrollTo(0, 0);

@@ -1302,9 +1302,11 @@ export function ChatView({ active: visible, focusId, onClose = () => {} }: { act
                   <button onClick={() => add()} className="text-[11px] px-2.5 py-1 rounded-lg shrink-0" style={{ color: "var(--text2)", border: "1px solid color-mix(in srgb, var(--border) 35%, transparent)" }} title="New chat">+ New</button>
                 </>} />
 
-                <div className="flex-1 min-h-0 flex overflow-hidden">
+                {/* LOCAL PATCH (apichat 2026-10-01): data-chat-split/-sidebar let
+                    mobile/phone.css stack the list above the conversation. */}
+                <div className="flex-1 min-h-0 flex overflow-hidden" data-chat-split>
                 {/* ---- sidebar: every open chat ---- */}
-                <div className="shrink-0 flex flex-col" style={{ width: sidebarW, background: "color-mix(in srgb, var(--bg) 40%, transparent)" }}>
+                <div className="shrink-0 flex flex-col" data-chat-sidebar style={{ width: sidebarW, background: "color-mix(in srgb, var(--bg) 40%, transparent)" }}>
                   {chats.length > 6 && (
                     <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter chats…"
                       className="mx-2.5 mt-2.5 mb-2 px-2.5 py-1.5 rounded-md text-[11px] outline-none shrink-0"
