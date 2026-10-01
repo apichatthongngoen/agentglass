@@ -23,6 +23,7 @@ import { ErrorStreaks, STOP_QUIET_MS, lanternStep, lanternState, type ErrorAlert
 import { webhookDestination } from "./egress.ts";
 import { kindOfNotification, type NotifyKind } from "../../shared/notifyPrefs.ts";
 import { readNotifyPrefs } from "./notifyPrefs.ts";
+import { toPhones } from "./phonepush.ts";
 
 // Resolved once, here, because the boot line below reports it and a boot line
 // that describes a destination the process is no longer using would be worse
@@ -186,6 +187,11 @@ async function deliver(
   // No double-fire when both really are alive: a desk client that is answering
   // pings keeps `live > 0`, so this returns before `notify-send` exactly as it
   // always did.
+  // LOCAL PATCH (apichat 2026-10-01): a locked phone is told even while a desk
+  // window is open — that window is not the person, and the return below would
+  // otherwise swallow the one channel that reaches a pocket. Redraws and clears
+  // are not news and never wake a phone. See phonepush.ts.
+  if (!redraw) toPhones({ title, body, kind, ...(extra?.key ? { tag: extra.key } : {}) });
   const { attached, live } = sink?.census() ?? { attached: 0, live: 0 };
   if (sink && attached > 0) sink.broadcast({ title, body, urgency, notifyKind: kind, ...(pane ? { pane } : {}), ...(extra ?? {}) });
   if (live > 0 || redraw) return;

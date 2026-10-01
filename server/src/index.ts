@@ -43,6 +43,8 @@ import {
   noteWaitFromHook,
 } from "./db.ts";
 import { maybeAlert, setAlertSink, pushDeviceStoreChanged, lanternSnapshot } from "./alerts.ts";
+import { vapidKeys, addSubscription, removeSubscription } from "./pushstore.ts"; // LOCAL PATCH: /push/*
+import { sendToPhones } from "./phonepush.ts"; // LOCAL PATCH: /push/test
 import { noteAction, actorOf, type ActorSource } from "./actions.ts";
 import { getSkills, catalogMarkdown, catalogCsv, usageSince } from "./skills.ts";
 import { getInsights } from "./insights.ts";
@@ -4943,6 +4945,35 @@ async function handleServerRequest(req: Request, srv: Server<WsData>): Promise<R
     if (pathname === "/pair/collect") {
       const r = collectPairing(url.searchParams.get("ticket") || "", url.searchParams.get("secret") || "");
       return json(r, r.state === "unknown" ? 404 : 200);
+    }
+
+    // LOCAL PATCH (apichat 2026-10-01): Web Push for the installed iPhone app.
+    // Restored from upstream b35c3fd6^, removed when no phone could reach a
+    // secure context; this deployment is HTTPS behind Cloudflare Access.
+    // GET /push/key needs `read`; the POSTs fall to `full` through
+    // scopeNeeded's deny-by-default (auth.ts), which the gate above enforced.
+    if (pathname === "/push/key") {
+      return json({ key: (await vapidKeys()).publicKey });
+    }
+    if (pathname === "/push/subscribe" && req.method === "POST") {
+      let b: any = {};
+      try { b = await req.json(); } catch { return json({ ok: false, error: "bad body" }, 400); }
+      const sub = b?.subscription;
+      if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+        return json({ ok: false, error: "a subscription needs an endpoint and both keys" }, 400);
+      }
+      const subs = addSubscription(sub, typeof b.label === "string" ? b.label.slice(0, 60) : undefined);
+      return json({ ok: true, devices: subs.length });
+    }
+    if (pathname === "/push/unsubscribe" && req.method === "POST") {
+      let b: any = {};
+      try { b = await req.json(); } catch { return json({ ok: false, error: "bad body" }, 400); }
+      const subs = removeSubscription(String(b?.endpoint || ""));
+      return json({ ok: true, devices: subs.length });
+    }
+    if (pathname === "/push/test" && req.method === "POST") {
+      const r = await sendToPhones({ title: "✅ agentglass", body: "Push is working.", kind: "blocked", tag: "push-test" });
+      return json({ ok: r.sent > 0, ...r });
     }
 
     /** What this device is, as this server sees it. The phone's Settings shows
