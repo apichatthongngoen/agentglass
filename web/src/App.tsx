@@ -85,6 +85,8 @@ import { requestPrJump } from "./lib/prJump.ts";
 import { requestPluginInstall } from "./lib/installPlugin.ts";
 import { subscribeGates, listGates } from "./lib/gateStore.ts";
 import { startMarksSync, syncMarks } from "./lib/marksSync.ts";
+import { PHONE } from "./mobile/phoneMode.ts";
+import { PhoneTabBar } from "./mobile/PhoneTabBar.tsx";
 
 /** The last segment of a path — a project's name as anyone says it out loud. */
 const leafOf = (p: string): string => p.split("/").filter(Boolean).pop() ?? p;
@@ -1195,6 +1197,10 @@ export default function App() {
           </LazyPanel>
         )}
       />}
+
+      {/* LOCAL PATCH (apichat 2026-10-01): the installed phone app navigates
+          from a bottom bar; the rail is hidden by mobile/phone.css. */}
+      {PHONE && <PhoneTabBar view={wsView} onView={goView} />}
 
       <EventModal event={selected} onClose={() => setSelected(null)} />
       <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} stats={stats} windowMs={windowMs} />
