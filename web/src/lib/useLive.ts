@@ -16,6 +16,7 @@ import { nudgeReminders } from "./reminderStore.ts";
 import { receiveNotifyPrefs } from "./notifyPrefsStore.ts";
 import { showPaceAlert } from "./paceAlert.ts";
 import { applyMarkRows, syncMarks } from "./marksSync.ts";
+import { accessExpired } from "../mobile/accessExpiry.ts";
 
 const MAX_EVENTS = 2000;
 const FLUSH_MS = 220; // coalesce bursts into ~5 renders/sec
@@ -183,6 +184,14 @@ export function useLive(paused = false): LiveData {
         const state = await probeAuth();
         if (disposed.current || wsRef.current !== ws) return;
         if (state === "unauthorized") { setConn("unauthorized"); return; }
+      }
+      // LOCAL PATCH (apichat 2026-10-01): behind Cloudflare Access an expired
+      // session looks exactly like a dead server; a reload takes the top-level
+      // page to the Access login instead of retrying forever.
+      if (!everOpened && location.protocol === "https:" && await accessExpired()) {
+        if (disposed.current || wsRef.current !== ws) return;
+        location.reload();
+        return;
       }
 
       setConn("closed");
