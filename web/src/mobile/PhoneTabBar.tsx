@@ -22,7 +22,10 @@ export function PhoneTabBar({ view, onView, extra }: { view: ViewId; onView: (v:
   return (
     <nav aria-label="Phone views" className="shrink-0 flex items-stretch"
       style={{ borderTop: "1px solid var(--surface-line)", background: "var(--surface-nav)",
-               paddingBottom: "env(safe-area-inset-bottom)" }}>
+               // Without viewport-fit=cover iOS reports no bottom inset, but the
+               // page still runs under the home indicator; keep the labels and
+               // their taps clear of it.
+               paddingBottom: "max(env(safe-area-inset-bottom), 14px)" }}>
       {defs.map((v) => {
         const Icon = v.icon;
         const on = v.id === view;

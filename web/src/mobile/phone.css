@@ -3,22 +3,20 @@
 html[data-phone], html[data-phone] body { overscroll-behavior: none; }
 
 /* App's root is `<div class="h-screen …">`, the first child of #root (main.tsx
-   mounts it inside a fragment).
+   mounts it inside a fragment). It fills the layout viewport, less the
+   on-screen keyboard (--kb, from phoneMode.ts).
 
-   100vh, not dvh and not the layout viewport. In an installed iOS app with a
-   translucent status bar, the page is drawn from the very top of the screen
-   but 100dvh — and `position: fixed; inset: 0`, which is the same box — come
-   out one status bar short, and left a blank strip under the tab bar. 100vh
-   is the whole screen there (upstream's own h-screen filled it). Fixed, so the
-   document has no height of its own to scroll by the difference. --app-h is
-   set by phoneMode.ts while the keyboard is up. */
+   No viewport-fit=cover, and so no safe-area-inset-top padding. Measured on
+   an iPhone 17 installed app with the translucent status bar: with cover, iOS
+   moved the page up under the status bar but did not make it taller, so the
+   TopBar sat under the status bar and the bottom ~57pt was never drawn —
+   neither 100dvh, a fixed inset:0 box nor 100vh could reach it. Without it
+   (upstream's viewport line) the page starts below the status bar and runs
+   to the bottom edge. */
 html[data-phone] #root > .h-screen {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--app-h, 100vh);
-  padding-top: env(safe-area-inset-top);
+  inset: 0 0 var(--kb, 0px) 0;
+  height: auto;
 }
 
 /* The rail (ViewRail.tsx) is replaced by mobile/PhoneTabBar.tsx. */
