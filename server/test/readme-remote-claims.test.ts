@@ -63,7 +63,11 @@ describe("what the README promises about an alert reaching a phone", () => {
     // is that this route does not exist, so a page reintroducing it anywhere
     // is the thing worth catching.
     for (const { path, text } of allDocs()) expect(text, `${path} mentions a push route again`).not.toContain("/push/");
-    expect(repo("server/src/index.ts")).not.toContain('pathname === "/push');
+    // LOCAL PATCH (apichat 2026-10-01): this fork serves /push/* again, on
+    // purpose, for the installed iPhone app (server/src/phonepush.ts). The
+    // worry below was a route with no switch; the switch is the phone tab
+    // bar's Alerts button, so check that it exists instead.
+    expect(repo("web/src/mobile/PushToggle.tsx")).toContain("enablePush");
     // The switch that turned it on was in the deleted companion, so a route
     // left behind would be reachable by nothing but a stranger with the token.
     expect(repo("server/src/alerts.ts")).not.toContain("pushEveryone");
