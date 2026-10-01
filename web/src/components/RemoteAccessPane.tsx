@@ -8,6 +8,7 @@ import { pickIndex, readPick, writePick, type PickedAddress } from "../lib/remot
 import { PairPanel } from "./PairPanel.tsx";
 import { usePoll } from "../lib/usePoll.ts";
 import type { RemoteStatus, RemoteDevice } from "../../../shared/types.ts";
+import { pairPanelOrigin } from "../mobile/pairPaste.ts";
 
 /**
  * Open the dashboard on your phone.
@@ -143,12 +144,12 @@ export function RemoteAccessPane({ open }: { open: boolean }) {
   const pairAddrs = st.addresses;
   const pairUrls = st.urls;
   const pick = Math.min(pickIndex(pairAddrs, chosen), Math.max(0, pairAddrs.length - 1));
-  // LOCAL PATCH (apichat 2026-10-01): reached over a public HTTPS name (a
-  // Cloudflare Tunnel behind Access), the page's own origin is the address a
-  // phone pairs over. The server itself stays bound to loopback, so
-  // `exposed`/`trustLan` are false and the panel below used to stay hidden.
-  // Accepting still needs a browser-vouched Origin (mayReleaseAHold).
-  const publicOrigin = location.protocol === "https:" ? location.origin : "";
+  // LOCAL PATCH (apichat 2026-10-01): dev12 stays bound to loopback behind a
+  // Cloudflare Tunnel, so `exposed`/`trustLan` are false and this panel stayed
+  // hidden. Only a loopback page can mint a ticket (atMachine), so it shows on
+  // one — an `ssh -L` forward to the box — with that page's own origin; the
+  // phone pastes the link and keeps only the ticket. See mobile/pairPaste.ts.
+  const publicOrigin = pairPanelOrigin(location.hostname, location.origin);
   const url = publicOrigin || (pairUrls[pick] ?? "");
   const address = pairAddrs[pick];
   const live = !!publicOrigin || (st.exposed && st.trustLan && pairUrls.length > 0);

@@ -1,6 +1,6 @@
 // LOCAL PATCH (apichat 2026-10-01): covers web/src/mobile/pairPaste.ts.
 import { describe, expect, test } from "bun:test";
-import { pairTicketFrom } from "../src/mobile/pairPaste.ts";
+import { pairPanelOrigin, pairTicketFrom } from "../src/mobile/pairPaste.ts";
 
 describe("pairTicketFrom", () => {
   test("a full pair link from the public host", () => {
@@ -20,5 +20,17 @@ describe("pairTicketFrom", () => {
   });
   test("nothing pasted", () => {
     expect(pairTicketFrom("")).toBe(null);
+  });
+});
+
+describe("pairPanelOrigin", () => {
+  test("a loopback page — the server's own machine, or an ssh -L to it — pairs from its origin", () => {
+    expect(pairPanelOrigin("localhost", "http://localhost:4400")).toBe("http://localhost:4400");
+    expect(pairPanelOrigin("127.0.0.1", "http://127.0.0.1:4000")).toBe("http://127.0.0.1:4000");
+    expect(pairPanelOrigin("[::1]", "http://[::1]:4000")).toBe("http://[::1]:4000");
+  });
+  test("the public name through the tunnel does not: the server refuses to mint there", () => {
+    expect(pairPanelOrigin("agentglass-dev.878383163.xyz", "https://agentglass-dev.878383163.xyz")).toBe("");
+    expect(pairPanelOrigin("192.168.1.5", "http://192.168.1.5:4000")).toBe("");
   });
 });
