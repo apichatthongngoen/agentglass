@@ -1,6 +1,6 @@
 # Spec: agentglass เป็น PWA บน iPhone (fork `local`)
 
-สถานะ: **v3 + plan แล้ว (tasks/plan.md)** — 2026-10-01 (v2 = scrutinize รอบ 2 + คำตอบผู้ใช้; v3 = scrutinize รอบ 3: pairing UI, ตำแหน่ง gate, spike ไม่ต้องเขียนโค้ด). ยังไม่ implement จนกว่าจะอนุมัติ plan และ Task 0 ผ่าน
+สถานะ: **implemented + deployed บน dev12 (2026-10-03)** — ใช้งานจริงบน iPhone 17: phone mode, pair, Term+KeyBar, Chat, push ผ่าน. ต่างจาก spec: pair ผ่านหน้า Remote บน URL tunnel (แก้ `atMachine`) ไม่ใช่ curl; ไม่ใช้ `viewport-fit=cover`; ไม่ต้อง Bypass Access (T6 ยกเลิก); เพิ่ม freshness reload + ไม่ตอบ DA บนมือถือ. รายละเอียด: runbook §8.15
 
 ## Objective
 
